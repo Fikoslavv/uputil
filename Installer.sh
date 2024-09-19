@@ -123,6 +123,7 @@ sha512sum "$(which uputil)" | sudo tee "$UPUTIL_CHECKSUM_FILE" > /dev/null 2> /d
 
 sudo chmod -R ugo=r "$UPUTIL_CONFIG_DIR";
 sudo chmod ugo=rx "$UPUTIL_CONFIG_DIR";
+sudo chmod ugo=rx "$UPUTIL_CHECKSUM_DIR";
 sudo chown -R root:root "$UPUTIL_CONFIG_DIR";
 
 if askUser "Do you want to remove \"$PWD\" (the directory the install script is in)?"; then
