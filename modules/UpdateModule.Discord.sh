@@ -1,5 +1,8 @@
 #!/bin/bash
 
+[ "$QUIET" ] || QUIET="1";
+[ "$VERBOSE" ] || VERBOSE="0";
+
 #Prefix[$1].randomHex"$2"DigitNumber.Suffix[$3] (Dots indcluded)
 function generateFileName()
 {
@@ -11,31 +14,53 @@ function generateFileName()
     echo "$fileName";
 }
 
+function get_is_quiet()
+{
+    [ "$QUIET" -eq 0 ] && return 0;
+    return 1;
+}
+
+function get_is_verbose()
+{
+    [ "$VERBOSE" -eq 0 ] && return 0;
+    return 1;
+}
+
+function print()
+{
+    ! get_is_quiet && get_is_verbose && printf "%s" "$*";
+}
+
+function println()
+{
+    ! get_is_quiet && get_is_verbose && printf "%s\n" "$*";
+}
+
 installDir="/usr/lib64/discord";
 
 if [[ "$1" == "--check-for-update" ]]; then
-    echo "[INFO] Running update check for discord";
+    println "[INFO] Running update check for discord";
 
     if ! cd "/tmp"; then
-        echo "[ERR] Failed to change working directory to \"/tmp\"!";
+        println "[ERR] Failed to change working directory to \"/tmp\"!" > /dev/stderr;
         exit 2;
     fi
 
     redirectSite="$(generateFileName "discord.redirect" "30" "html")";
 
     if ! curl -so "$redirectSite" "https://discord.com/api/download?platform=linux&format=tar.gz"; then
-        echo "[ERR] Failed to download redirect site from \"https://discord.com/api/download?platform=linux&format=tar.gz\".";
+        println "[ERR] Failed to download redirect site from \"https://discord.com/api/download?platform=linux&format=tar.gz\".";
 
         if [ -f "$redirectSite" ]; then
             if rm "$redirectSite"; then
-                echo "[INFO] Successfully removed temp file \"$redirectSite\".";
+                println "[INFO] Successfully removed temp file \"$redirectSite\".";
                 exit 3;
             else
-                echo "[ERR] Failed to remove temp file \"$redirectSite\"!";
+                println "[ERR] Failed to remove temp file \"$redirectSite\"!" > /dev/stderr;
                 exit 4;
             fi
         else
-            echo "[WARN] Temp file \"$redirectSite\" doesn't exist in \"$PWD\" directory!";
+            println "[WARN] Temp file \"$redirectSite\" doesn't exist in \"$PWD\" directory!" > /dev/stderr;
             exit 5;
         fi
     fi
@@ -47,65 +72,65 @@ if [[ "$1" == "--check-for-update" ]]; then
         installedVersion="null";
     fi
 
-    echo "[INFO] Installed version of discord is \"$installedVersion\".";
+    println "[INFO] Installed version of discord is \"$installedVersion\".";
 
     newestVersion="$(grep -Eo "([0-9]*[.])*[0-9]+" <<< cat "$PWD/$redirectSite" | tail -n 1)";
 
     if [ -f "$redirectSite" ]; then
         if rm "$redirectSite"; then
-            echo "[INFO] Successfully removed temp file \"$redirectSite\".";
+            println "[INFO] Successfully removed temp file \"$redirectSite\".";
         else
-            echo "[ERR] Failed to remove temp file \"$redirectSite\"!";
+            println "[ERR] Failed to remove temp file \"$redirectSite\"!" > /dev/stderr;
             exit 6;
         fi
     else
-        echo "[WARN] Temp file \"$redirectSite\" doesn't exist in \"$PWD\" directory!";
+        println "[WARN] Temp file \"$redirectSite\" doesn't exist in \"$PWD\" directory!" > /dev/stderr;
     fi
 
-    echo "[INFO] Newset version of discord is \"$newestVersion\".";
+    println "[INFO] Newset version of discord is \"$newestVersion\".";
 
     if [ "$installedVersion" = "$newestVersion" ]; then
-        echo "[INFO] No updates are available for discord.";
+        println "[INFO] No updates are available for discord.";
         exit 1;
     else
-        echo "[INFO] There is an update available for discord.";
+        println "[INFO] There is an update available for discord.";
         exit 0;
     fi
 elif [ "$1" = "--upgrade" ]; then
     if ! cd /tmp; then
-        echo "[ERR] Failed to change working directory to \"/tmp\"!";
+        println "[ERR] Failed to change working directory to \"/tmp\"!" > /dev/stderr;
     fi
 
     packagePath="$(generateFileName "discord.package" "30" "tar.gz")";
 
-    echo "[INFO] Downloading discord package…";
+    println "[INFO] Downloading discord package…";
 
     if ! curl -sLo "$packagePath" "https://discord.com/api/download?platform=linux&format=tar.gz"; then
-        echo "[ERR] Failed to download discord package!";
+        println "[ERR] Failed to download discord package!" > /dev/stderr;
         if rm "$packagePath"; then
-            echo "[WARN] Successfully removed temp file \"$packagePath\".";
+            println "[WARN] Successfully removed temp file \"$packagePath\"." > /dev/stderr;
             exit 7;
         else
-            echo "[WARN] Failed to remove temp file \"$packagePath\".";
+            println "[WARN] Failed to remove temp file \"$packagePath\"." > /dev/stderr;
             exit 8;
         fi
     fi
 
     if ! tar -xf "$packagePath"; then
-        echo "[ERR] Failed to extract discord package!";
+        println "[ERR] Failed to extract discord package!" > /dev/stderr;
         if rm "$packagePath"; then
-            echo "[WARN] Successfully removed temp file \"$packagePath\".";
+            println "[WARN] Successfully removed temp file \"$packagePath\"." > /dev/stderr;
             exit 7;
         else
-            echo "[WARN] Failed to remove temp file \"$packagePath\".";
+            println "[WARN] Failed to remove temp file \"$packagePath\"." > /dev/stderr;
             exit 8;
         fi
     fi
 
     if rm "$packagePath"; then
-        echo "[INFO] Successfully removed temp package file.";
+        println "[INFO] Successfully removed temp package file.";
     else
-        echo "[WARN] Failed to remove temp package file \"$packagePath\"";
+        println "[WARN] Failed to remove temp package file \"$packagePath\"" > /dev/stderr;
     fi
 
     # [ -d /lib64/discord ] && sudo rm -rf /lib64/discord;
@@ -114,27 +139,27 @@ elif [ "$1" = "--upgrade" ]; then
     if [ -L "/usr/bin/Discord" ]; then
         if sudo rm -f "/usr/bin/Discord"; then
             if sudo ln -s "$installDir/Discord" /usr/bin/Discord; then
-                echo "[INFO] Successfully linked \"/usr/bin/Discord\" to \"$installDir/Discord\"";
+                println "[INFO] Successfully linked \"/usr/bin/Discord\" to \"$installDir/Discord\"";
             else
-                echo "[INFO] Failed to link \"/usr/bin/Discord\" to \"$installDir/Discord\"";
+                println "[INFO] Failed to link \"/usr/bin/Discord\" to \"$installDir/Discord\"";
             fi
         else
-            echo "[WARN] Failed to remove \"/usr/bin/Discord\". Link to \"$installDir/Discord\" will not be created automatically";
+            println "[WARN] Failed to remove \"/usr/bin/Discord\". Link to \"$installDir/Discord\" will not be created automatically" > /dev/stderr;
         fi
     else
-        echo "[INFO] Link \"/usr/bin/Discord\" doesn't exist !";
+        println "[INFO] Link \"/usr/bin/Discord\" doesn't exist !";
         if sudo ln -s "$installDir/Discord" /usr/bin/Discord; then
-            echo "[INFO] Successfully linked \"/usr/bin/Discord\" to \"$installDir/Discord\"";
+            println "[INFO] Successfully linked \"/usr/bin/Discord\" to \"$installDir/Discord\"";
         else
-            echo "[INFO] Failed to link \"/usr/bin/Discord\" to \"$installDir/Discord\"";
+            println "[INFO] Failed to link \"/usr/bin/Discord\" to \"$installDir/Discord\"";
         fi
     fi
 
     if sudo mv Discord "$installDir"; then
-        echo "[INFO] Successfully installed discord app.";
+        println "[INFO] Successfully installed discord app.";
         exit 0;
     else
-        echo "[ERR] Failed to move \"$PWD/Discord\" directory to \"$installDir\"";
+        println "[ERR] Failed to move \"$PWD/Discord\" directory to \"$installDir\"" > /dev/stderr;
         exit 9;
     fi
 fi

@@ -21,7 +21,7 @@ function interpretShortArguments()
             [[ "$letter" == "v" ]] && VERBOSE="0";
             [[ "$letter" == "c" ]] && UPDATE="0";
             [[ "$letter" == "u" ]] && UPGRADE="0";
-            [[ "$letter" == "i" ]] && INTEGRITY_CHECK="0";
+            [[ "$letter" == "i" ]] && TRUSTWORTHYNESS_CHECK="0";
 
         done
 
@@ -39,7 +39,7 @@ function interpretLongArguments()
         [[ "$1" == "--verbose" ]] && VERBOSE="0";
         [[ "$1" == "--update" ]] && UPDATE="0";
         [[ "$1" == "--upgrade" ]] && UPGRADE="0";
-        [[ "$1" == "--integrity-check" ]] && INTEGRITY_CHECK="0";
+        [[ "$1" == "--integrity-check" ]] && TRUSTWORTHYNESS_CHECK="0";
         [[ "$1" == "--no-interact" ]] && NO_INTERACT="0";
         [[ "$1" == "--interactable-exit" ]] && AWAIT_INPUT_BEFORE_PROGRAM_EXIT="0";
         [[ "$1" == "--help" ]] && HELP="0";
@@ -76,7 +76,7 @@ function set_settings_to_default()
     NO_INTERACT="1";
     UPDATE="1";
     UPGRADE="1";
-    INTEGRITY_CHECK="1";
+    TRUSTWORTHYNESS_CHECK="1";
     AWAIT_INPUT_BEFORE_PROGRAM_EXIT="1";
     HELP="1";
 }
@@ -116,9 +116,9 @@ function get_is_upgrade()
     return 1;
 }
 
-function get_is_integrity_check()
+function get_is_trustworthyness_check()
 {
-    [ "$INTEGRITY_CHECK" -eq 0 ] && return 0;
+    [ "$TRUSTWORTHYNESS_CHECK" -eq 0 ] && return 0;
     return 1;
 }
 
@@ -361,26 +361,26 @@ function checkModulesTrustworthyness()
             if ! [ -f "$checksumFilePath" ]; then
             
                 println "Module \"$(basename "$module")\" has not been trusted yet.";
-                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules[${#trustedModules[@]}]="$module";
+                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules["${#trustedModules[@]}"]="$module";
                 println;
             
             elif ! grep -Eq "4[04]4 root" <<< "$(stat -c "%a %U" "$checksumFilePath")"; then
 
                 warningPrintln "Checksum file of module \"$(basename "$module")\" has permissions different than 444 or its owner is not root !";
-                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules[${#trustedModules[@]}]="$module";
+                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules["${#trustedModules[@]}"]="$module";
                 println;
 
             elif ! sha512sum --check --quiet "$checksumFilePath" 2> /dev/null > /dev/null; then
 
                 println "Module \"$(basename "$module")\" has been changed since it was trusted.";
-                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules[${#trustedModules[@]}]="$module";
+                askUserIfModuleIsTrustworthy "$module" "$checksumFilePath" && trustedModules["${#trustedModules[@]}"]="$module";
                 println;
 
             else
 
                 debugPrintln "Module \"$(basename "$module")\" verified successfully";
                 get_is_verbose && println;
-                trustedModules[${#trustedModules[@]}]="$module";
+                trustedModules["${#trustedModules[@]}"]="$module";
 
             fi
 
@@ -423,26 +423,20 @@ function perform_check_update()
 
         local result;
 
-        if get_is_verbose && ! get_is_quiet; then
+        export QUIET;
+        export VERBOSE;
 
-            # "$module" --update;
-            "$module" --check-for-update; #TODO => switch to new argument system...
-            result="$?";
-
-        else
-
-            "$module" --check-for-update > /dev/null;
-            result="$?";
-
-        fi
+        # "$module" --update;
+        "$module" --check-for-update; #TODO => switch to new argument system...
+        result="$?";
 
         debugPrint "Module \"$(basename "$module")\" returned code $result ";
 
         if [ "$result" -eq 0 ]; then
 
-            get_is_verbose && print "(update available)";
+            upgradable["${#upgradable[@]}"]="$module";
 
-            upgradable[${#upgradable[@]}]="$module";
+            get_is_verbose && print "(update available)";
 
         elif [ "$result" -eq 1 ]; then
 
@@ -480,7 +474,7 @@ function perform_check_update()
 
     elif [ "${#upgradable[@]}" -eq 1 ]; then
 
-        println "Module \"$(basename "$module")\" reported available update";
+        println "Module \"$(basename "${upgradable[0]}")\" reported available update";
 
     else
 
@@ -496,19 +490,20 @@ function perform_check_update()
 
 function perform_upgrade()
 {
-    if [ "${#upgradable[@]}" -eq 0 ] && ( ! get_is_update ); then
+    if ! get_is_update; then
 
         perform_check_update;
 
     fi
 
-    if [ "${#trustedModules[@]}" -eq 0 ]; then
+    if ! get_is_trustworthyness_check; then
 
         println "Running trustworthyness check...";
 
         if ! checkModulesTrustworthyness; then
 
             errorPrintln "Failed to check trustworthyness of modules. Upgrade canceled.";
+            return 255;
 
         fi
 
@@ -560,19 +555,17 @@ function perform_upgrade()
     local failedUpgrades;
     failedUpgrades=();
 
+    export QUIET;
+    export VERBOSE;
+
     for module in "${upgradable[@]}"; do
 
         local result;
 
         debugPrintln "Triggering module \"$(basename "$module")\"...";
 
-        if get_is_verbose && ! get_is_quiet; then
-            "$module" --upgrade;
-            result="$?";
-        else
-            "$module" --upgrade > /dev/null;
-            result="$?";
-        fi
+        "$module" --upgrade;
+        result="$?";
 
         debugPrint "Module \"$(basename "$module")\" returned code $result ";
 
@@ -669,7 +662,7 @@ if get_is_update; then
     perform_check_update;
     result=$?;
 
-    if ! get_is_upgrade && ! get_is_integrity_check; then
+    if ! get_is_upgrade && ! get_is_trustworthyness_check; then
 
         get_is_interactable_exit && println;
 
@@ -681,14 +674,14 @@ if get_is_update; then
 
 fi
 
-if get_is_integrity_check; then
+if get_is_trustworthyness_check; then
 
-    println "Triggering integrity check";
+    println "Triggering trustworthyness check";
 
     checkModulesTrustworthyness;
     result=$?;
 
-    print "Integrity check ";
+    print "Trustworthyness check ";
     if [ "$result" -eq 0 ]; then
         println "succeeded";
     else
